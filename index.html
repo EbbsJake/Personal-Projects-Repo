@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hyperscaler CapEx Interactive — Redpoint 2026 Market Update</title>
+<meta name="description" content="Interactive visualization of hyperscaler capital expenditure data from Redpoint Ventures' 2026 Market Update." />
+<meta property="og:title" content="Hyperscaler CapEx Interactive" />
+<meta property="og:description" content="Explore $780B+ in hyperscaler AI infrastructure spending — interactive proof of concept built from Redpoint's 2026 Market Update." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #f0ece4; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ── DATA ── */
+const DATA = {
+  years: ["2024A", "2025E", "2026E", "2027E"],
+  totals: [309, 498, 765, 779],
+  companies: [
+    { name: "Other", color: "#a8a8a8", values: [59, 94, 128, 138] },
+    { name: "Amazon", color: "#c41e1e", values: [86, 125, 175, 157] },
+    { name: "Meta", color: "#e85454", values: [72, 116, 153, 168] },
+    { name: "Google", color: "#737373", values: [53, 91, 181, 173] },
+    { name: "Microsoft", color: "#404040", values: [39, 72, 128, 143] },
+  ],
+  cagr: [
+    { name: "Overall", rate: "36%" },
+    { name: "Meta", rate: "54%" },
+    { name: "Google", rate: "49%" },
+    { name: "Microsoft", rate: "33%" },
+    { name: "Amazon", rate: "22%" },
+    { name: "Other", rate: "32%" },
+  ],
+};
+
+const OTHER_BREAKDOWN = [
+  { name: "Oracle", est2024: 11, est2025: 18, note: "Fastest-growing; FY25 capex 3x FY24" },
+  { name: "Tesla", est2024: 11, est2025: 11, note: "~$5B AI-specific (Dojo, inference)" },
+  { name: "Apple", est2024: 10, est2025: 13, note: "Lowest AI-intensity of big tech" },
+  { name: "Alibaba", est2024: 8, est2025: 18, note: "RMB 380B over 3 yrs for AI+cloud" },
+  { name: "Tencent", est2024: 5, est2025: 10, note: "More measured; prioritizing margins" },
+  { name: "HPE", est2024: 3, est2025: 5, note: "Enterprise AI servers & networking" },
+  { name: "IBM", est2024: 3, est2025: 4, note: "Hybrid cloud + watsonx infra" },
+  { name: "Baidu", est2024: 3, est2025: 5, note: "Ernie Bot + autonomous driving" },
+  { name: "SAP", est2024: 3, est2025: 5, note: "Cloud migration + Joule AI" },
+  { name: "Salesforce", est2024: 2, est2025: 5, note: "Agentforce data center expansion" },
+];
+
+const COMPANY_DETAIL = {
+  Microsoft: {
+    allocation: [
+      { label: "GPUs & CPUs", pct: 67, color: "#404040" },
+      { label: "Data Centers & Land", pct: 22, color: "#666" },
+      { label: "Networking", pct: 11, color: "#999" },
+    ],
+    note: "~2/3 of capex is short-lived assets (GPUs/CPUs). Azure AI demand is primary driver. FY ends June.",
+    cloudRev: { label: "Azure Revenue", fy2024: 96, fy2025E: 134, growth: "40%" },
+  },
+  Google: {
+    allocation: [
+      { label: "Servers (TPUs, GPUs, CPUs)", pct: 60, color: "#737373" },
+      { label: "Data Centers & Networking", pct: 40, color: "#aaa" },
+    ],
+    note: "Google confirmed 60/40 server-to-infrastructure split. Mix of custom TPUs + NVIDIA GPUs.",
+    cloudRev: { label: "Google Cloud Revenue", fy2024: 43, fy2025E: 58, growth: "34%" },
+  },
+  Amazon: {
+    allocation: [
+      { label: "AWS Infrastructure", pct: 72, color: "#c41e1e" },
+      { label: "Fulfillment & Retail", pct: 20, color: "#e87777" },
+      { label: "Other (Studios, etc.)", pct: 8, color: "#f0b0b0" },
+    ],
+    note: "Amazon uniquely breaks out AWS capex: ~72% of total. Includes Trainium custom silicon.",
+    cloudRev: { label: "AWS Revenue", fy2024: 105, fy2025E: 130, growth: "20%" },
+  },
+  Meta: {
+    allocation: [
+      { label: "AI Data Centers & Servers", pct: 80, color: "#e85454" },
+      { label: "Networking & Power", pct: 15, color: "#f09090" },
+      { label: "Reality Labs & Other", pct: 5, color: "#f0c0c0" },
+    ],
+    note: "No direct cloud revenue. Capex funds LLaMA training, inference for 3B+ users, and AI ads optimization.",
+    cloudRev: null,
+  },
+};
+
+const REVENUE_EFFICIENCY = [
+  { name: "Amazon", capex2025: 125, cloudRev2025: 130, ratio: 1.04, color: "#c41e1e" },
+  { name: "Google", capex2025: 91, cloudRev2025: 58, ratio: 0.64, color: "#737373" },
+  { name: "Microsoft", capex2025: 83, cloudRev2025: 134, ratio: 1.61, color: "#404040" },
+  { name: "Meta", capex2025: 72, cloudRev2025: 0, ratio: 0, color: "#e85454", note: "No direct cloud rev — monetizes via ads on 3B+ users" },
+];
+
+const CROSS_REFS = [
+  { title: "Not the Dotcom Bubble", page: 4, stat: "$700B+", detail: "Hyperscaler spending is 2.8x the inflation-adjusted telecom build of 2000. Key difference: >90% capacity is pre-committed with near-zero vacancy, vs. <3% fiber utilization in dotcom era. And it's largely funded by cash flow, not debt.", color: "#c41e1e" },
+  { title: "AI Revenue Is Real", page: 40, stat: "$152B", detail: "AI companies projected to generate $152B in 2026 revenue (114% YoY growth), capturing 58% of every new dollar added to the software market. OpenAI and Anthropic each at $20B+ ARR.", color: "#404040" },
+  { title: "CIOs Confirm Demand", page: 19, stat: "58%", detail: "58% of CIOs rank AI features as the #1 driver of increased software spend. This infrastructure is being built against measured enterprise demand.", color: "#737373" },
+];
+
+function fmt(v) { return v == null ? "—" : `$${v}B`; }
+
+/* ── CHART ── */
+function BarChart({ ac, setAc, ay, setAy }) {
+  const svgRef = useRef(null);
+  const boxRef = useRef(null);
+  const [dims, setDims] = useState({ w: 500, h: 360 });
+
+  useEffect(() => {
+    function go() { if (boxRef.current) setDims({ w: Math.min(boxRef.current.getBoundingClientRect().width, 560), h: 360 }); }
+    go(); window.addEventListener("resize", go); return () => window.removeEventListener("resize", go);
+  }, []);
+
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const svg = d3.select(svgRef.current); svg.selectAll("*").remove();
+    const m = { top: 36, right: 14, bottom: 46, left: 46 };
+    const w = dims.w - m.left - m.right, h = dims.h - m.top - m.bottom;
+    const g = svg.append("g").attr("transform", `translate(${m.left},${m.top})`);
+    const x = d3.scaleBand().domain(DATA.years).range([0, w]).padding(0.32);
+    const y = d3.scaleLinear().domain([0, 850]).range([h, 0]);
+
+    [200, 400, 600, 800].forEach(v => g.append("line").attr("x1", 0).attr("x2", w).attr("y1", y(v)).attr("y2", y(v)).attr("stroke", "#d4d0c8").attr("stroke-dasharray", "2,4"));
+    [0, 200, 400, 600, 800].forEach(v => g.append("text").attr("x", -8).attr("y", y(v)).attr("dy", "0.35em").attr("text-anchor", "end").attr("fill", "#aaa").attr("font-size", "10px").attr("font-family", "'DM Sans',sans-serif").text(`$${v}B`));
+    DATA.years.forEach(yr => {
+      g.append("text").attr("x", x(yr) + x.bandwidth() / 2).attr("y", h + 24).attr("text-anchor", "middle").attr("fill", "#1a1a1a").attr("font-size", "12px").attr("font-weight", "700").attr("font-family", "'DM Sans',sans-serif").text(yr).style("cursor", "pointer").on("click", () => { const i = DATA.years.indexOf(yr); setAy(ay === i ? null : i); });
+    });
+
+    DATA.years.forEach((yr, yi) => {
+      let cum = 0;
+      DATA.companies.forEach(co => {
+        const v = co.values[yi]; if (v == null) return;
+        const y0 = cum, y1 = cum + v; cum = y1;
+        let fill = co.color;
+        if (ac && co.name !== ac) fill = "#d4d0c8";
+        else if (ay !== null && yi !== ay) fill = co.color + "50";
+
+        g.append("rect").attr("x", x(yr)).attr("width", x.bandwidth()).attr("y", y(y1)).attr("height", Math.max(0, y(y0) - y(y1))).attr("fill", fill).attr("rx", 1).style("cursor", "pointer").style("transition", "fill 0.2s")
+          .on("mouseenter", () => setAc(co.name)).on("mouseleave", () => setAc(null)).on("click", () => setAy(ay === yi ? null : yi));
+
+        const barH = y(y0) - y(y1);
+        if (barH > 11) {
+          const isHi = (!ac || co.name === ac) && (ay === null || yi === ay);
+          const smallBar = barH < 22;
+          g.append("text").attr("x", x(yr) + x.bandwidth() / 2).attr("y", y(y1) + barH / 2).attr("dy", "0.35em").attr("text-anchor", "middle").attr("fill", isHi ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)").attr("font-size", smallBar ? "8px" : "10px").attr("font-weight", "600").attr("font-family", "'DM Sans',sans-serif").text(fmt(v)).style("pointer-events", "none");
+        }
+      });
+      const total = DATA.totals[yi];
+      const isAct = ay === null || ay === yi;
+      g.append("text").attr("x", x(yr) + x.bandwidth() / 2).attr("y", y(total) - 10).attr("text-anchor", "middle").attr("fill", isAct ? "#1a1a1a" : "#aaa").attr("font-size", "13.5px").attr("font-weight", "800").attr("font-family", "'DM Sans',sans-serif").text(fmt(total));
+    });
+  }, [dims, ac, ay]);
+
+  return <div ref={boxRef} style={{ width: "100%" }}><svg ref={svgRef} width={dims.w} height={dims.h} /></div>;
+}
+
+/* ── OTHER BREAKDOWN PANEL ── */
+function OtherPanel() {
+  return (
+    <div style={{ background: "rgba(0,0,0,0.03)", borderRadius: 10, padding: "14px 16px", marginTop: 12, border: "1px solid rgba(0,0,0,0.06)" }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a", fontFamily: "'DM Sans',sans-serif", marginBottom: 2 }}>
+        "Other" Breakdown <span style={{ fontSize: 11, fontWeight: 500, color: "#999" }}>— 10 companies, ~$59B in 2024</span>
+      </div>
+      <div style={{ fontSize: 10.5, color: "#888", marginBottom: 10, lineHeight: 1.4 }}>Estimated capex based on company filings and analyst reports.</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 6 }}>
+        {OTHER_BREAKDOWN.map(co => (
+          <div key={co.name} style={{ background: "white", borderRadius: 7, padding: "8px 10px", border: "1px solid rgba(0,0,0,0.05)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#1a1a1a", fontFamily: "'DM Sans',sans-serif" }}>{co.name}</span>
+              <div style={{ textAlign: "right" }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "#555", fontFamily: "'DM Sans',sans-serif" }}>~${co.est2024}B</span>
+                <span style={{ fontSize: 9, color: "#aaa", marginLeft: 3 }}>→ ~${co.est2025}B</span>
+              </div>
+            </div>
+            <div style={{ fontSize: 9.5, color: "#999", marginTop: 2, lineHeight: 1.3 }}>{co.note}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── COMPANY DETAIL PANEL ── */
+function CompanyPanel({ name }) {
+  const info = COMPANY_DETAIL[name];
+  if (!info) return null;
+  return (
+    <div style={{ background: "rgba(0,0,0,0.03)", borderRadius: 10, padding: "14px 16px", marginTop: 12, border: "1px solid rgba(0,0,0,0.06)" }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a", fontFamily: "'DM Sans',sans-serif", marginBottom: 10 }}>
+        {name} Capex Allocation
+      </div>
+      <div style={{ display: "flex", gap: 3, height: 28, borderRadius: 6, overflow: "hidden", marginBottom: 8 }}>
+        {info.allocation.map(a => (
+          <div key={a.label} style={{ flex: a.pct, background: a.color, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 0 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "0 4px" }}>{a.pct}%</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", marginBottom: 8 }}>
+        {info.allocation.map(a => (
+          <div key={a.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: a.color }} />
+            <span style={{ fontSize: 10.5, color: "#555", fontFamily: "'DM Sans',sans-serif" }}>{a.label}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: "#777", lineHeight: 1.45, marginBottom: info.cloudRev ? 10 : 0 }}>{info.note}</div>
+      {info.cloudRev && (
+        <div style={{ background: "white", borderRadius: 7, padding: "8px 12px", border: "1px solid rgba(0,0,0,0.05)", display: "inline-flex", gap: 14, alignItems: "baseline", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10, color: "#999", fontWeight: 600 }}>{info.cloudRev.label}</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a" }}>{fmt(info.cloudRev.fy2024)}</span>
+          <span style={{ fontSize: 10, color: "#aaa" }}>→</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a" }}>{fmt(info.cloudRev.fy2025E)}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "#16a34a", background: "rgba(22,163,74,0.08)", padding: "1px 5px", borderRadius: 3 }}>+{info.cloudRev.growth} YoY</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── REVENUE EFFICIENCY ── */
+function EfficiencyPanel() {
+  return (
+    <div style={{ background: "rgba(0,0,0,0.03)", borderRadius: 10, padding: "14px 16px", marginTop: 12, border: "1px solid rgba(0,0,0,0.06)" }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a", fontFamily: "'DM Sans',sans-serif", marginBottom: 2 }}>
+        Cloud Revenue per $1 of Capex <span style={{ fontSize: 10, fontWeight: 500, color: "#999" }}>— 2025E</span>
+      </div>
+      <div style={{ fontSize: 10.5, color: "#888", marginBottom: 10, lineHeight: 1.4 }}>How efficiently is each dollar of infrastructure investment generating cloud/AI revenue?</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {REVENUE_EFFICIENCY.map(co => (
+          <div key={co.name} style={{ flex: "1 1 140px", background: "white", borderRadius: 7, padding: "10px 12px", border: "1px solid rgba(0,0,0,0.05)", borderLeft: `3px solid ${co.color}` }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a", marginBottom: 4 }}>{co.name}</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4 }}>
+              <span style={{ fontSize: 11, color: "#999" }}>Capex</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a" }}>{fmt(co.capex2025)}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: "#999" }}>Cloud Rev</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a" }}>{co.cloudRev2025 ? fmt(co.cloudRev2025) : "N/A"}</span>
+            </div>
+            {co.ratio > 0 ? (
+              <div style={{ background: co.ratio >= 1 ? "rgba(22,163,74,0.08)" : "rgba(196,30,30,0.06)", borderRadius: 5, padding: "4px 8px", textAlign: "center" }}>
+                <span style={{ fontSize: 18, fontWeight: 900, color: co.ratio >= 1 ? "#16a34a" : "#c41e1e", fontFamily: "'DM Sans',sans-serif" }}>${co.ratio.toFixed(2)}</span>
+                <span style={{ fontSize: 9, color: "#888", display: "block" }}>revenue per $1 capex</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: 9.5, color: "#999", lineHeight: 1.3, fontStyle: "italic" }}>{co.note}</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── CROSS-REF SECTION ── */
+function CrossRefSection() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div onClick={() => setOpen(!open)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", userSelect: "none" }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "#c41e1e", letterSpacing: "0.1em", textTransform: "uppercase" }}>Connections across the deck</div>
+        <span style={{ fontSize: 12, color: "#c41e1e", transition: "transform 0.25s", display: "inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>&#9654;</span>
+      </div>
+      {open && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 8 }}>
+          {CROSS_REFS.map((item, i) => (
+            <div key={i} style={{ background: "white", border: `1px solid ${item.color}30`, borderLeft: `3px solid ${item.color}`, borderRadius: 8, padding: "11px 13px", flex: "1 1 180px", minWidth: 180 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 9, color: "#aaa", fontWeight: 700, letterSpacing: "0.06em" }}>SLIDE {item.page}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1a1a1a", fontFamily: "'DM Sans',sans-serif", marginTop: 1 }}>{item.title}</div>
+                </div>
+                <div style={{ fontSize: 17, fontWeight: 900, color: item.color, fontFamily: "'DM Sans',sans-serif" }}>{item.stat}</div>
+              </div>
+              <div style={{ marginTop: 7, fontSize: 11, color: "#555", lineHeight: 1.5, borderTop: "1px solid rgba(0,0,0,0.05)", paddingTop: 7 }}>{item.detail}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── MAIN ── */
+function App() {
+  const [ac, setAc] = useState(null);
+  const [ay, setAy] = useState(null);
+
+  const showOther = ac === "Other";
+  const showCompany = ac && ac !== "Other" && COMPANY_DETAIL[ac];
+
+  return (
+    <div style={{ background: "#f0ece4", minHeight: "100vh", padding: "24px 18px", fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ maxWidth: 700, margin: "0 auto" }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "#c41e1e", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 5 }}>Redpoint Ventures · 2026 Market Update · Interactive</div>
+        <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: "clamp(22px,4.5vw,34px)", fontWeight: 900, color: "#1a1a1a", lineHeight: 1.12, margin: "0 0 5px 0" }}>
+          Hyperscalers Investing to Meet AI Demand<span style={{ color: "#c41e1e" }}>.</span>
+        </h1>
+        <p style={{ fontSize: 12.5, color: "#888", lineHeight: 1.5, margin: "0 0 12px 0", maxWidth: 520 }}>
+          Hover a company to see where their capex goes. Click a year for detail. Explore the "Other" bucket to see all 10 companies.
+        </p>
+
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 360px" }}>
+            <BarChart ac={ac} setAc={setAc} ay={ay} setAy={setAy} />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 12px", marginTop: 4 }}>
+              {[...DATA.companies].reverse().map(co => (
+                <div key={co.name} onClick={() => setAc(ac === co.name ? null : co.name)} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", opacity: !ac || ac === co.name ? 1 : 0.25, transition: "opacity 0.2s", padding: "2px 5px", borderRadius: 4, background: ac === co.name ? "rgba(0,0,0,0.04)" : "transparent" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: co.color }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#1a1a1a" }}>{co.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ background: "#3a3a3a", borderRadius: 10, padding: "14px 16px", minWidth: 148 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>2024–27E CAGR</div>
+            {DATA.cagr.map(item => {
+              const hi = !ac || ac === item.name || item.name === "Overall";
+              return (
+                <div key={item.name} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", opacity: hi ? 1 : 0.2, transition: "opacity 0.2s" }}>
+                  <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.7)" }}>{item.name}</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: item.name === "Overall" ? "#fff" : item.name === "Meta" ? "#e85454" : item.name === "Amazon" ? "#c41e1e" : "rgba(255,255,255,0.85)" }}>{item.rate}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {showOther && <OtherPanel />}
+        {showCompany && <CompanyPanel name={ac} />}
+
+        {ay !== null && (
+          <div style={{ background: "rgba(196,30,30,0.04)", borderRadius: 10, padding: "14px 16px", marginTop: 12, border: "1px solid rgba(196,30,30,0.1)" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+              <span style={{ fontSize: 15, fontWeight: 800, color: "#1a1a1a" }}>{DATA.years[ay]}</span>
+              <span style={{ fontSize: 20, fontWeight: 900, color: "#c41e1e" }}>{fmt(DATA.totals[ay])}</span>
+              {ay > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#c41e1e", background: "rgba(196,30,30,0.08)", padding: "1px 7px", borderRadius: 4 }}>+{(((DATA.totals[ay] - DATA.totals[ay - 1]) / DATA.totals[ay - 1]) * 100).toFixed(0)}% YoY</span>}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {[...DATA.companies].reverse().map(co => {
+                const v = co.values[ay]; const pct = DATA.totals[ay] ? ((v / DATA.totals[ay]) * 100).toFixed(0) : 0;
+                return (
+                  <div key={co.name} style={{ background: "rgba(255,255,255,0.75)", borderRadius: 6, padding: "6px 10px", flex: "1 1 auto", minWidth: 80, borderLeft: `3px solid ${co.color}` }}>
+                    <div style={{ fontSize: 9.5, color: "#999", fontWeight: 600 }}>{co.name}</div>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: "#1a1a1a" }}>{fmt(v)}</span>
+                    <span style={{ fontSize: 9, color: "#aaa", marginLeft: 3 }}>({pct}%)</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <EfficiencyPanel />
+        <CrossRefSection />
+
+        <div style={{ marginTop: 16, paddingTop: 10, borderTop: "1px solid rgba(0,0,0,0.06)", fontSize: 9, color: "#aaa", lineHeight: 1.5 }}>
+          Chart data: Redpoint Ventures 2026 Market Update (p.3). Company allocation splits from earnings calls (Google Q3'25, Amazon Q3'25, Microsoft Q1 FY26). "Other" estimates from company filings and analyst reports. Cloud revenue from public filings.
+          <br />Interactive proof of concept. Not affiliated with Redpoint Ventures.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
