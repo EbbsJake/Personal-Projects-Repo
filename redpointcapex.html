@@ -133,8 +133,12 @@ function BarChart({ ac, setAc, ay, setAy }) {
     [200, 400, 600, 800].forEach(v => g.append("line").attr("x1", 0).attr("x2", w).attr("y1", y(v)).attr("y2", y(v)).attr("stroke", "#d4d0c8").attr("stroke-dasharray", "2,4"));
     [0, 200, 400, 600, 800].forEach(v => g.append("text").attr("x", -8).attr("y", y(v)).attr("dy", "0.35em").attr("text-anchor", "end").attr("fill", "#aaa").attr("font-size", "10px").attr("font-family", "'DM Sans',sans-serif").text(`$${v}B`));
     DATA.years.forEach(yr => {
-      g.append("text").attr("x", x(yr) + x.bandwidth() / 2).attr("y", h + 24).attr("text-anchor", "middle").attr("fill", "#1a1a1a").attr("font-size", "12px").attr("font-weight", "700").attr("font-family", "'DM Sans',sans-serif").text(yr).style("cursor", "pointer").on("click", () => { const i = DATA.years.indexOf(yr); setAy(ay === i ? null : i); });
+      const yi = DATA.years.indexOf(yr);
+      const isSelected = ay === yi;
+      g.append("text").attr("x", x(yr) + x.bandwidth() / 2).attr("y", h + 24).attr("text-anchor", "middle").attr("fill", isSelected ? "#c41e1e" : "#1a1a1a").attr("font-size", "12px").attr("font-weight", "700").attr("font-family", "'DM Sans',sans-serif").attr("text-decoration", "underline").text(yr).style("cursor", "pointer").on("click", () => { setAy(ay === yi ? null : yi); });
     });
+    // click hint below x-axis
+    g.append("text").attr("x", w / 2).attr("y", h + 40).attr("text-anchor", "middle").attr("fill", "#ccc").attr("font-size", "9px").attr("font-family", "'DM Sans',sans-serif").text("↑ click a year to drill down");
 
     DATA.years.forEach((yr, yi) => {
       let cum = 0;
@@ -151,8 +155,7 @@ function BarChart({ ac, setAc, ay, setAy }) {
         const barH = y(y0) - y(y1);
         if (barH > 11) {
           const isHi = (!ac || co.name === ac) && (ay === null || yi === ay);
-          const smallBar = barH < 22;
-          g.append("text").attr("x", x(yr) + x.bandwidth() / 2).attr("y", y(y1) + barH / 2).attr("dy", "0.35em").attr("text-anchor", "middle").attr("fill", isHi ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)").attr("font-size", smallBar ? "8px" : "10px").attr("font-weight", "600").attr("font-family", "'DM Sans',sans-serif").text(fmt(v)).style("pointer-events", "none");
+          g.append("text").attr("x", x(yr) + x.bandwidth() / 2).attr("y", y(y1) + barH / 2).attr("dy", "0.35em").attr("text-anchor", "middle").attr("fill", isHi ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)").attr("font-size", "9px").attr("font-weight", "600").attr("font-family", "'DM Sans',sans-serif").text(fmt(v)).style("pointer-events", "none");
         }
       });
       const total = DATA.totals[yi];
@@ -267,23 +270,24 @@ function EfficiencyPanel() {
 function CrossRefSection() {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ marginTop: 18 }}>
-      <div onClick={() => setOpen(!open)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", userSelect: "none" }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "#c41e1e", letterSpacing: "0.1em", textTransform: "uppercase" }}>Connections across the deck</div>
-        <span style={{ fontSize: 12, color: "#c41e1e", transition: "transform 0.25s", display: "inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>&#9654;</span>
+    <div style={{ marginTop: 22 }}>
+      <div onClick={() => setOpen(!open)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", padding: "10px 14px", background: open ? "rgba(196,30,30,0.05)" : "rgba(0,0,0,0.02)", borderRadius: 8, border: "1px solid rgba(0,0,0,0.06)" }}>
+        <span style={{ fontSize: 14, color: "#c41e1e", transition: "transform 0.25s", display: "inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>&#9654;</span>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a" }}>Connections Across the Deck</div>
+        <div style={{ fontSize: 10, color: "#aaa", marginLeft: "auto" }}>{open ? "click to collapse" : "click to expand"}</div>
       </div>
       {open && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 8 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
           {CROSS_REFS.map((item, i) => (
-            <div key={i} style={{ background: "white", border: `1px solid ${item.color}30`, borderLeft: `3px solid ${item.color}`, borderRadius: 8, padding: "11px 13px", flex: "1 1 180px", minWidth: 180 }}>
+            <div key={i} style={{ background: "white", border: `1px solid ${item.color}30`, borderLeft: `4px solid ${item.color}`, borderRadius: 10, padding: "14px 16px", flex: "1 1 200px", minWidth: 200 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 9, color: "#aaa", fontWeight: 700, letterSpacing: "0.06em" }}>SLIDE {item.page}</div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1a1a1a", fontFamily: "'DM Sans',sans-serif", marginTop: 1 }}>{item.title}</div>
+                  <div style={{ fontSize: 10, color: "#aaa", fontWeight: 700, letterSpacing: "0.06em" }}>SLIDE {item.page}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a", fontFamily: "'DM Sans',sans-serif", marginTop: 2 }}>{item.title}</div>
                 </div>
-                <div style={{ fontSize: 17, fontWeight: 900, color: item.color, fontFamily: "'DM Sans',sans-serif" }}>{item.stat}</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: item.color, fontFamily: "'DM Sans',sans-serif" }}>{item.stat}</div>
               </div>
-              <div style={{ marginTop: 7, fontSize: 11, color: "#555", lineHeight: 1.5, borderTop: "1px solid rgba(0,0,0,0.05)", paddingTop: 7 }}>{item.detail}</div>
+              <div style={{ marginTop: 8, fontSize: 12.5, color: "#555", lineHeight: 1.55, borderTop: "1px solid rgba(0,0,0,0.05)", paddingTop: 8 }}>{item.detail}</div>
             </div>
           ))}
         </div>
@@ -314,13 +318,14 @@ function App() {
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 360px" }}>
             <BarChart ac={ac} setAc={setAc} ay={ay} setAy={setAy} />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 12px", marginTop: 4 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 8px", marginTop: 4 }}>
               {[...DATA.companies].reverse().map(co => (
-                <div key={co.name} onClick={() => setAc(ac === co.name ? null : co.name)} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", opacity: !ac || ac === co.name ? 1 : 0.25, transition: "opacity 0.2s", padding: "2px 5px", borderRadius: 4, background: ac === co.name ? "rgba(0,0,0,0.04)" : "transparent" }}>
+                <div key={co.name} onClick={() => setAc(ac === co.name ? null : co.name)} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", opacity: !ac || ac === co.name ? 1 : 0.25, transition: "all 0.2s", padding: "4px 10px", borderRadius: 20, background: ac === co.name ? "rgba(0,0,0,0.08)" : "rgba(0,0,0,0.03)", border: ac === co.name ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(0,0,0,0.06)" }}>
                   <div style={{ width: 8, height: 8, borderRadius: 2, background: co.color }} />
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#1a1a1a" }}>{co.name}</span>
                 </div>
               ))}
+              <div style={{ fontSize: 9, color: "#bbb", alignSelf: "center", marginLeft: 4 }}>← click to explore</div>
             </div>
           </div>
           <div style={{ background: "#3a3a3a", borderRadius: 10, padding: "14px 16px", minWidth: 148 }}>
@@ -366,7 +371,7 @@ function App() {
         <CrossRefSection />
 
         <div style={{ marginTop: 16, paddingTop: 10, borderTop: "1px solid rgba(0,0,0,0.06)", fontSize: 9, color: "#aaa", lineHeight: 1.5 }}>
-          Chart data: Redpoint Ventures 2026 Market Update (p.3). Company allocation splits from earnings calls (Google Q3'25, Amazon Q3'25, Microsoft Q1 FY26). "Other" estimates from company filings and analyst reports. Cloud revenue from public filings.
+          This interactive visualization was generated with AI assistance. Data has not been independently validated and may contain errors. Chart data sourced from Redpoint Ventures 2026 Market Update (p.3). Company allocation splits referenced from earnings calls (Google Q3'25, Amazon Q3'25, Microsoft Q1 FY26). "Other" estimates from company filings and analyst reports. Cloud revenue from public filings.
           <br />Interactive proof of concept. Not affiliated with Redpoint Ventures.
         </div>
       </div>
